@@ -111,8 +111,8 @@ function get_model(monitor::Dict{Symbol, Any}, hyper::Dict{Symbol, Any})
         ),
 
         Hy_array = Logical(3,
-            (C0k, ϕy_support, Ry_inv_array) -> array3d_from_mats(
-                [exponential(C0k, ϕy_support[i]) * Ry_inv_array[:, :, i] for i in eachindex(ϕy_support)]
+            (Ck, ϕy_support, Ry_inv_array) -> array3d_from_mats(
+                [exponential(Ck, ϕy_support[i]) * Ry_inv_array[:, :, i] for i in eachindex(ϕy_support)]
             ),
             false
         ),
@@ -160,8 +160,8 @@ function get_model(monitor::Dict{Symbol, Any}, hyper::Dict{Symbol, Any})
             false
         ),
 
-        n0_total = Logical(
-            (n0, T) -> n0 * T,
+        n_total = Logical(
+            (n, T) -> n * T,
             false
         ),
 
@@ -183,9 +183,9 @@ function get_model(monitor::Dict{Symbol, Any}, hyper::Dict{Symbol, Any})
             end
         ),
 
-        Sampler(:τ2y, (y_sse, τ2y, n0_total) ->
+        Sampler(:τ2y, (y_sse, τ2y, n_total) ->
             begin
-                a = n0_total / 2 + shape(τ2y.distr)
+                a = n_total / 2 + shape(τ2y.distr)
                 b = y_sse / 2 + scale(τ2y.distr)
                 rand(InverseGamma(a, b))
             end

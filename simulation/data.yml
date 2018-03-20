@@ -1,6 +1,6 @@
 
 T: 20
-ny: 50
+nm: 50
 prop_obs_per_timepoint: 0.5
 
 # response variable
