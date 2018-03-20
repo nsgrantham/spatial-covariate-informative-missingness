@@ -1,0 +1,24 @@
+
+T: 20
+ny: 50
+prop_obs_per_timepoint: 0.5
+
+# response variable
+y:
+  beta:   [10.0]
+  sigma2:  16.0
+  tau2:     3.0
+  phi:      3.0
+
+# spatially-missing covariate
+z:
+  beta:   [0.0]
+  sigma2:  3.0
+  tau2:    0.1
+  phi:     1.0
+
+# missingness factor
+w:
+  beta:   [0.0]
+  sigma2:  0.9
+  phi:     0.1

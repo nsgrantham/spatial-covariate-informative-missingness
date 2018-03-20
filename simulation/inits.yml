@@ -1,0 +1,9 @@
+
+# response variable
+y:
+  alpha: 0.0
+  beta: zeros
+  tau2: 1.0
+  sigma2: 1.0
+  phi: 
+    index: 4
