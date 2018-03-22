@@ -62,6 +62,112 @@ function parse_config(conf)
     return parsed_conf
 end
 
+function generate_data(;
+        T::Int=10, nm::Int=50, m_active::Float64=0.5, p::Int=1, misspecify::Bool=false,
+        βy::Vector{Float64}=zeros(p), βz::Vector{Float64}=zeros(p), βw::Vector{Float64}=zeros(p),
+        αy::Float64=0.0, αw::Float64=0.0, σ2y::Float64=1.0, σ2z::Float64=1.0, σ2w::Float64=0.5,
+        τ2y::Float64=1.0, τ2z::Float64=1.0, ϕy::Float64=1.0, ϕz::Float64=1.0, ϕw::Float64=1.0)
+
+    @assert 0.0 <= m_active <= 1.0
+
+    S = expandgrid(0.0:0.05:1.0)
+    Sk = expandgrid(0.0625:0.125:0.9375)
+    ux, uy = [Uniform(minmax...) for minmax in extrema(S, 2)]
+    Sm = transpose(hcat(rand(ux, nm), rand(uy, nm)))
+    metric = Euclidean()
+    nearest_cell = dimmin(pairwise(metric, S, Sm), 1)
+
+    n = size(S, 2)
+    x = ones(n, 1)
+    xm = ones(nm, 1)
+    p -= 1
+    while p > 0
+        v = randn(n)
+        x = hcat(x, v)
+        xm = hcat(xm, v[nearest_cell])
+        p -= 1
+    end
+    X = array3d_from_mats([x for _ in 1:T])
+    Xm = array3d_from_mats([xm for _ in 1:T])
+    p = size(X, 2)
+
+    # generate spatial covariate
+    Xβz = matrix_from_rows([X[:, :, t] * βz for t in 1:T])
+    D = pairwise(metric, S)
+    ηz = transpose(rand(MvNormal(σ2z .* exponential(D, ϕz)), T))
+    z_mean = Xβz + ηz
+    z = matrix_from_rows([rand(MvNormal(z_mean[t, :], sqrt(τ2z))) for t in 1:T])
+
+    # generate response variable conditional on spatial covariate
+    zαy = z .* αy
+    Xβy = matrix_from_rows([X[:, :, t] * βy for t in 1:T])
+    ηy = transpose(rand(MvNormal(σ2y .* exponential(D, ϕy)), T))
+    y_mean = zαy + Xβy + ηy
+    y = matrix_from_rows([rand(MvNormal(y_mean[t, :], sqrt(τ2y))) for t in 1:T])
+
+    # generate missingness factor conditional on spatial covariate
+    z_meanαw = z_mean .* αw
+    Xβw = matrix_from_rows([X[:, :, t] * βw for t in 1:T])
+    τ2w = 1 - σ2w
+    ηw = transpose(rand(MvNormal(σ2w .* exponential(D, ϕw)), T))
+    if misspecify
+        Φ = cdf(Normal(), ηz ./ sqrt(σ2z))
+        a = sqrt(σ2z) ./ sqrt(Φ .* (1 .- Φ))
+        b = Xβz .- sqrt(σ2z) .* sqrt(Φ) ./ sqrt(1 .- Φ)
+        w_mean = αw .* (a .* (ηz .> 0) + b) + Xβw + ηw
+    else
+        w_mean = z_meanαw + Xβw + ηw
+    end
+    w = matrix_from_rows([rand(MvNormal(w_mean[t, :], sqrt(τ2w))) for t in 1:T])
+
+    # make spatial covariate missing based on missingness factor
+    z_all = copy(z)
+    for i in eachindex(z, w)
+        if w[i] > 0.0
+            z[i] = NaN
+        end
+    end
+
+    # make only a subset of monitors active at each timepoint
+    y_all = copy(y)
+    for i in eachindex(y)
+        if rand() > m_active
+            y[i] = NaN
+        end
+    end
+    ym = y[:, nearest_cell]
+
+    # define and return dicts of data (for mcmc) and truth (for validation)
+    truth = Dict{Symbol, Any}(
+        :y_all => y_all,
+        :z_all => z_all
+    )
+
+    data = Dict{Symbol, Any}(
+        :ym => ym,
+        :Xm => Xm,
+        :Sm => Sm,
+        :y => y,
+        :z => z,
+        :X => X,
+        :S => S,
+        :Sk => Sk,
+        :D => D,
+        :T => T,
+        :n => n,
+        :nm => nm,
+        :p => p
+    )
+    data[:nk] = size(Sk, 2)
+    data[:Ck] = pairwise(metric, S, Sk)
+    data[:Dk] = pairwise(metric, Sk)
+    data[:Dm] = pairwise(metric, Sm)
+    data[:y_missing] = isnan.(y)
+    data[:z_missing] = isnan.(z)
+
+    return data, truth
+end
+
 args = parse_commandline()
 
 @assert 0 < args["iters"]
