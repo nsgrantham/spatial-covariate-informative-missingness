@@ -1,5 +1,5 @@
-# Spatial regression model that includes a spatially-missing covariate
-# under the assumption that its values are missing-at-random
+# Spatial regression models that includes a spatially-missing covariate
+# under the assumption that its values are missing-not-at-random
 
 using Mamba: Model, Stochastic, Logical, Sampler, setsamplers!
 using StatsBase: Weights
@@ -267,6 +267,147 @@ function get_model(monitor::Dict{Symbol, Any}, hyper::Dict{Symbol, Any})
             false
         ),
 
+        w = Stochastic(2,
+            (w_mean, τ2w, T) -> MultivariateDistribution[
+                MvNormal(w_mean[t, :], sqrt(τ2w)) for t in 1:T
+            ],
+            monitor[:w_pred] 
+        ),
+
+        τ2w = Logical(
+            (σ2w) -> 1 - σ2w,
+            false
+        ),
+
+        w_mean = Logical(2,
+            (Xβzαw, Hηzαw, Xβw, Hηw) -> Xβzαw + Hηzαw + Xβw + Hηw,
+            false
+        ),
+
+        Xβw = Logical(2,
+            (X, βw, T) -> matrix_from_rows([X[:, :, t] * βw for t in 1:T]),
+            false
+        ),
+
+        βw = Stochastic(1,
+            (p) -> MvNormal(p, sqrt(hyper[:βw]["var"])),
+            monitor[:βw]
+        ),
+
+        Hηzαw = Logical(2,
+            (αw, Hηz) -> αw .* Hηz,
+            false
+        ),
+
+        Xβzαw = Logical(2,
+            (αw, Xβz) -> αw .* Xβz,
+            false
+        ),
+
+        αw = Stochastic(
+            () -> Normal(0.0, sqrt(hyper[:αw]["var"])),
+            monitor[:αw]
+        ),
+
+        Hηw = Logical(2,
+            (Hw, ηw) -> ηw * transpose(Hw),
+            false
+        ),
+
+        w_sse = Logical(
+            (w, w_mean) -> sum(abs2, w - w_mean),
+            false
+        ),
+
+        w_sss = Logical(
+            (ηw, Rw_inv, T) -> sum(
+                [(transpose(ηw[t, :]) * Rw_inv * ηw[t, :])[1] for t in 1:T]
+            ),
+            false
+        ),
+
+        ηw = Stochastic(2,
+            (σ2w, Rw, T) -> MultivariateDistribution[
+                MvNormal(σ2w .* Rw) for t in 1:T
+            ],
+            monitor[:ηw]
+        ),
+
+        σ2w = Stochastic(
+            () -> Beta(hyper[:σ2w]["a"], hyper[:σ2w]["b"]),
+            monitor[:σ2w]
+        ),
+
+        ϕw = Logical(
+            (ϕw_support, ϕw_index) -> ϕw_support[round(Int, ϕw_index)],
+            monitor[:ϕw]
+        ),
+
+        ϕw_index = Stochastic(
+            (ϕw_support) -> Categorical(length(ϕw_support)),
+            false
+        ),
+
+        ϕw_support = Logical(1,
+            () -> collect(hyper[:ϕw]["start"]:hyper[:ϕw]["by"]:hyper[:ϕw]["end"]),
+            false
+        ),
+
+        HwtHw = Logical(2,
+            (HwtHw_array, ϕw_index) -> HwtHw_array[:, :, round(Int, ϕw_index)],
+            false
+        ),
+
+        Hw = Logical(2,
+            (Hw_array, ϕw_index) -> Hw_array[:, :, round(Int, ϕw_index)],
+            false
+        ),
+
+        Rw_inv = Logical(2,
+            (Rw_inv_array, ϕw_index) -> Rw_inv_array[:, :, round(Int, ϕw_index)],
+            false
+        ),
+
+        Rw = Logical(2,
+            (Rw_array, ϕw_index) -> Rw_array[:, :, round(Int, ϕw_index)],
+            false
+        ),
+
+        HwtHw_array = Logical(3,
+            (Hw_array) -> array3d_from_mats(
+                [(Hw = Hw_array[:, :, i]; transpose(Hw) * Hw) for i in 1:size(Hw_array, 3)]
+            ),
+            false
+        ),
+
+        Hw_array = Logical(3,
+            (Ck, ϕw_support, Rw_inv_array) -> array3d_from_mats(
+                [exponential(Ck, ϕw_support[i]) * Rw_inv_array[:, :, i] for i in 1:length(ϕw_support)]
+            ),
+            false
+        ),
+
+        Rw_inv_array = Logical(3,
+            (Rw_array) -> array3d_from_mats(
+                [inv(Rw_array[:, :, i]) for i in 1:size(Rw_array, 3)]
+            ),
+            false
+        ),
+
+        logdetRw_array = Logical(1,
+            (Rw_array) -> Float64[
+                logdet(Rw_array[:, :, i]) for i in 1:size(Rw_array, 3)
+            ],
+            false
+        ),
+
+        Rw_array = Logical(3,
+            (ϕw_support, Dk) -> array3d_from_mats(
+                [exponential(Dk, ϕ) for ϕ in ϕw_support]
+            ),
+            false
+        ),
+
         sumXtX = Logical(2,
             (X, T) -> sum([(x = X[:, :, t]; transpose(x) * x) for t in 1:T]),
             false
@@ -292,7 +433,7 @@ function get_model(monitor::Dict{Symbol, Any}, hyper::Dict{Symbol, Any})
             false
         )
     )
-    
+
     samplers = [
         Sampler(:y, (y, y_mean, y_missing, τ2y) ->
             begin
@@ -365,15 +506,15 @@ function get_model(monitor::Dict{Symbol, Any}, hyper::Dict{Symbol, Any})
                 logpost .-= maximum(logpost)
                 sample(ϕy_index_array, Weights(exp.(logpost)))
             end
-        ),
-
-        Sampler(:z, (z_mean, z, τ2z, αy, τ2y, y, Xβy, Hηy, ϕz, T, z_missing) ->
+        ),        
+        
+        Sampler(:z, (z_mean, z, τ2z, αy, τ2y, y, Xβy, Hηy, z_missing) ->
             begin
-                Σ = 1 / (1 / τ2z + (αy^2) / τ2y)
-                μ = Σ .* (z_mean ./ τ2z + (y - Xβy - Hηy) .* (αy / τ2y))
+                σ2 = 1 / (1 / τ2z + (αy^2) / τ2y)
+                μ = σ2 .* (z_mean ./ τ2z + (y - Xβy - Hηy) .* (αy / τ2y))
                 for i in eachindex(z, μ, z_missing)
                     if z_missing[i]
-                        z[i] = rand(Normal(μ[i], sqrt(Σ)))
+                        z[i] = rand(Normal(μ[i], sqrt(σ2)))
                     end
                 end
                 z
@@ -388,21 +529,25 @@ function get_model(monitor::Dict{Symbol, Any}, hyper::Dict{Symbol, Any})
             end
         ),
 
-        Sampler(:βz, (z, Hηz, βz, X, sumXtX, τ2z, T) ->
+        Sampler(:βz, (z, Hηz, βz, αw, τ2w, X, sumXtX, τ2z, w, Xβw, Hηw, Hηzαw, T) ->
             begin
-                Σ = inv(sumXtX ./ τ2z + invcov(βz.distr))
+                Σ = inv(sumXtX .* (1 / τ2z + (αw^2) / τ2w) + invcov(βz.distr))
                 A = z - Hηz
+                B = w - Xβw - Hηw - Hηzαw
                 μ = Σ * sum([transpose(X[:, :, t]) * A[t, :] for t in 1:T]) ./ τ2z
+                μ += Σ * sum([transpose(X[:, :, t]) * B[t, :] for t in 1:T]) .* (αw / τ2w)
                 rand(MvNormal(μ, Hermitian(Σ)))
             end
         ),
 
-        Sampler(:ηz, (z, Xβz, ηz, Hz, HztHz, Rz_inv, σ2z, τ2z, T) ->
+        Sampler(:ηz, (z, Xβz, ηz, αw, τ2w, HztHz, Hz, Rz_inv, σ2z, τ2z, T, w, Xβw, Hηw, Xβzαw) ->
             begin
                 A = z - Xβz
-                Σ = inv(HztHz ./ τ2z + Rz_inv ./ σ2z)
+                B = w - Xβw - Hηw - Xβzαw
+                Σ = inv(HztHz .* (1 / τ2z + (αw^2) / τ2w) + Rz_inv ./ σ2z)
                 for t in 1:T
                     μ = Σ * (transpose(Hz) * A[t, :] ./ τ2z)
+                    μ += Σ * (transpose(Hz) * B[t, :] .* (αw / τ2w))
                     ηz[t, :] = rand(MvNormal(μ, Hermitian(Σ)))
                 end
                 ηz
@@ -417,14 +562,16 @@ function get_model(monitor::Dict{Symbol, Any}, hyper::Dict{Symbol, Any})
             end
         ),
 
-        Sampler(:ϕz_index, (ηz, σ2z, τ2z, z, Xβz, logdetRz_array, Rz_inv_array, Hz_array, ϕz_support, T) ->
+        Sampler(:ϕz_index, (ηz, σ2z, τ2z, z, Xβz, w, Xβw, Hηw, Xβzαw, αw, τ2w, logdetRz_array, Rz_inv_array, Hz_array, T, ϕz_support) ->
             begin
                 logpost = zeros(ϕz_support)
                 A = z - Xβz
+                B = w - Xβw - Hηw - Xβzαw
                 ϕz_index_array = 1:length(ϕz_support)
                 for i in ϕz_index_array
                     Hηz = ηz * transpose(Hz_array[:, :, i])
                     logpost[i] = -sum(abs2, A - Hηz) / (2 * τ2z)
+                    logpost[i] += -sum(abs2, B - αw .* Hηz) / (2 * τ2w)
                     logpost[i] += -(T / 2) * logdetRz_array[i]
                     for t in 1:T
                         logpost[i] += -(transpose(ηz[t, :]) * Rz_inv_array[:, :, i] * ηz[t, :])[1] / (2 * σ2z)
@@ -433,12 +580,74 @@ function get_model(monitor::Dict{Symbol, Any}, hyper::Dict{Symbol, Any})
                 logpost .-= maximum(logpost)
                 sample(ϕz_index_array, Weights(exp.(logpost)))
             end
+        ),
+
+        Sampler(:w, (w, w_mean, τ2w, z_missing) ->
+            begin
+                for i in eachindex(w, w_mean, z_missing)
+                    if z_missing[i]
+                        w[i] = rand(TruncatedNormal(w_mean[i], sqrt(τ2w), 0, Inf))
+                    else
+                        w[i] = rand(TruncatedNormal(w_mean[i], sqrt(τ2w), -Inf, 0))
+                    end
+                end
+                w
+            end
+        ),
+
+        Sampler(:βw, (βw, X, sumXtX, w, Xβzαw, Hηzαw, Hηw, τ2w, T) ->
+            begin
+                Σ = inv(sumXtX ./ τ2w + invcov(βw.distr))
+                A = w - Xβzαw - Hηzαw - Hηw
+                μ = Σ * sum([transpose(X[:, :, t]) * A[t, :] for t in 1:T]) / τ2w
+                rand(MvNormal(μ, Hermitian(Σ)))
+            end
+        ),
+
+        Sampler(:ηw, (ηw, Hw, HwtHw, Rw_inv, σ2w, w, Xβw, Hηzαw, Xβzαw, τ2w, T) ->
+            begin
+                A = w - Xβw - Hηzαw - Xβzαw
+                Σ = inv(HwtHw ./ τ2w + Rw_inv ./ σ2w)
+                for t in 1:T
+                    μ = Σ * ((transpose(Hw) * A[t, :]) ./ τ2w)
+                    ηw[t, :] = rand(MvNormal(μ, Hermitian(Σ)))
+                end
+                ηw
+            end
+        ),
+
+        Sampler(:αw, (αw, z_mean, τ2w, w, Xβw, Hηw, T) ->
+            begin
+                σ2 = 1 / (sum(abs2, z_mean) / τ2w + 1 / var(αw.distr))
+                μ = σ2 * sum(z_mean .* (w - Xβw - Hηw)) / τ2w
+                rand(Normal(μ, sqrt(σ2)))
+            end
+        ),
+
+        AMWG(:σ2w, 0.05, adapt=:burnin),
+
+        Sampler(:ϕw_index, (ηw, σ2w, τ2w, w, Xβw, Xβzαw, Hηzαw, logdetRw_array, Rw_inv_array, Hw_array, T, ϕw_support) ->
+            begin
+                logpost = zeros(ϕw_support)
+                A = w - Xβw - Xβzαw - Hηzαw
+                ϕw_support_index = 1:length(ϕw_support)
+                for i in ϕw_support_index
+                    logpost[i] = -sum(abs2, A - ηw * transpose(Hw_array[:, :, i])) / (2 * τ2w)
+                    logpost[i] += -(T / 2) * logdetRw_array[i]
+                    for t in 1:T
+                        logpost[i] += -(transpose(ηw[t, :]) * Rw_inv_array[:, :, i] * ηw[t, :])[1] / (2  * σ2w)
+                    end
+                end
+                logpost .-= maximum(logpost)
+                sample(ϕw_support_index, Weights(exp.(logpost)))
+            end
         )
     ]
-    
+
     setsamplers!(model, samplers)
     return model
 end
+
 
 function get_inits(params::Dict{Symbol, Any}, data::Dict{Symbol, Any})
     y_init = copy(data[:y])
@@ -455,9 +664,15 @@ function get_inits(params::Dict{Symbol, Any}, data::Dict{Symbol, Any})
             z_init[i] = z_mean
         end
     end
-
+    w_init = zeros(data[:T], data[:n])
+    z_missing = data[:z_missing]
+    for i in eachindex(w_init, z_missing)
+        w_init[i] = z_missing[i] ? 0.5 : -0.5
+    end
+    
     βy_init = params[:βy] == "zeros" ? zeros(data[:p]) : params[:βy]
     βz_init = params[:βz] == "zeros" ? zeros(data[:p]) : params[:βz]
+    βw_init = params[:βw] == "zeros" ? zeros(data[:p]) : params[:βw]
 
     inits = Dict{Symbol, Any}(
         :y => y_init,
@@ -472,7 +687,14 @@ function get_inits(params::Dict{Symbol, Any}, data::Dict{Symbol, Any})
         :βz => βz_init,
         :σ2z => params[:σ2z],
         :τ2z => params[:τ2z],
-        :ϕz_index => params[:ϕz]["index"]
+        :ϕz_index => params[:ϕz]["index"],
+        :w => w_init,
+        :ηw => zeros(data[:T], data[:nk]),
+        :βw => βw_init,
+        :αw => params[:αw],
+        :σ2w => params[:σ2w],
+        :ϕw_index => params[:ϕw]["index"]
     )
     return inits
 end
+

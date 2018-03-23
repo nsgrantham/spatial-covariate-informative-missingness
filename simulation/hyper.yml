@@ -25,7 +25,6 @@ y:
     by:    0.2
     end:   4.0
 
-# response variable
 z:
   # zero-mean MvNormal(sqrt(var))
   beta:
@@ -46,3 +45,23 @@ z:
     start: 0.4
     by:    0.2
     end:   4.0
+
+w:
+  # zero-mean Normal(sqrt(var))
+  alpha:
+    var: 1000
+  
+    # zero-mean MvNormal(sqrt(var))
+  beta:
+    var: 1000
+
+  # InverseGamma(a, b)
+  sigma2:
+    a: 1
+    b: 1
+
+  # DiscreteUniform(start:by:end)
+  phi: 
+    start: 0.1
+    by:    0.1
+    end:   1.0
