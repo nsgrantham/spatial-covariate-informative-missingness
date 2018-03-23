@@ -256,11 +256,12 @@ function get_inits(params::Dict{Symbol, Any}, data::Dict{Symbol, Any})
 
     inits = Dict{Symbol, Any}(
         :y => y_init,
-        :ηy => zeros(size(data[:y], 1), size(data[:Sk], 2)),
+        :ηy => zeros(data[:T], data[:nk]),
         :βy => βy_init,
         :αy => params[:αy],
         :σ2y => params[:σ2y],
         :τ2y => params[:τ2y],
         :ϕy_index => params[:ϕy]["index"]
     )
+    return inits
 end

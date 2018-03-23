@@ -14,13 +14,16 @@ y:
 
 # spatially-missing covariate
 z:
-  beta:   false
+  eta:    false
+  beta:   true
   sigma2: true
   tau2:   true
   phi:    true
 
 # missingness factor
 w:
+  alpha:  true
+  eta:    false
   beta:   false
   sigma2: true
   phi:    true

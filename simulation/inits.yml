@@ -7,3 +7,10 @@ y:
   sigma2: 1.0
   phi: 
     index: 4
+
+z:
+  beta: zeros
+  tau2: 0.1
+  sigma2: 0.1
+  phi: 
+    index: 4

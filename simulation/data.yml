@@ -5,6 +5,7 @@ m_active: 0.5
 
 # response variable
 y:
+  alpha:    0.0
   beta:   [10.0]
   sigma2:  16.0
   tau2:     3.0
@@ -19,6 +20,7 @@ z:
 
 # missingness factor
 w:
+  alpha:   0.0
   beta:   [0.0]
   sigma2:  0.9
   phi:     0.1
