@@ -1,9 +1,9 @@
 using ArgParse
 using DataFrames
+using Distances
 using Mamba
+using SpatialModels
 using YAML
-
-include(joinpath(@__DIR__, "..", "utils.jl"))
 
 function parse_commandline()
     s = ArgParseSettings("Fit a model to artificially-generated data.")
@@ -34,8 +34,8 @@ function parse_commandline()
             help = "YAML defining initial values of stochastic nodes."
         "--hyper"
             help = "YAML defining hyperparameters of stochastic node priors."
-        "--model"
-            help = "Julia file defining Mamba model and MCMC sampling scheme."
+        "--covariate"
+            help = "A subtype of SpatialCovariateMissingness."
     end
     return parse_args(s)
 end
@@ -195,17 +195,18 @@ args = parse_commandline()
 @assert 0 < args["thin"]    "Thin must be positive"
 @assert 0 < args["chains"]  "Chains must be positive"
 
-@assert isfile(args["model"])
-include(abspath(args["model"]))  # get_model, get_inits
+missingness = ["NotAvailable", "MissingAtRandom", "MissingNotAtRandom"] 
+@assert args["covariate"] in missingness
+covariate = eval(Symbol(args["covariate"]))
 
 monitor_conf = load_config(abspath(args["monitor"]))
 hyper_conf = load_config(abspath(args["hyper"]))
 data_conf = load_config(abspath(args["data"]))
 inits_conf = load_config(abspath(args["inits"]))
 
-model = get_model(monitor_conf, hyper_conf)
+model = get_model(covariate, monitor_conf, hyper_conf)
 data, truth = generate_data(; data_conf...)
-inits = get_inits(inits_conf, data)
+inits = get_inits(covariate, inits_conf, data)
 inits = [inits for _ in 1:args["chains"]]
 
 mcmc_kwargs = Dict(Symbol(key) => args[key] for key in ["burnin", "thin", "chains"])

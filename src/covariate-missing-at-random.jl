@@ -1,13 +1,7 @@
 # Spatial regression model that includes a spatially-missing covariate
 # under the assumption that its values are missing-at-random
 
-using Mamba: Model, Stochastic, Logical, Sampler, setsamplers!
-using StatsBase: Weights
-using Distributions
-
-include(joinpath(@__DIR__, "..", "utils.jl"))
-
-function get_model(monitor::Dict{Symbol, Any}, hyper::Dict{Symbol, Any})
+function get_model(::Type{MissingAtRandom}, monitor::Dict{Symbol, Any}, hyper::Dict{Symbol, Any})
     model = Model(
         y = Stochastic(2,
             (y_mean, τ2y, T) -> MultivariateDistribution[
@@ -440,7 +434,7 @@ function get_model(monitor::Dict{Symbol, Any}, hyper::Dict{Symbol, Any})
     return model
 end
 
-function get_inits(params::Dict{Symbol, Any}, data::Dict{Symbol, Any})
+function get_inits(::Type{MissingAtRandom}, params::Dict{Symbol, Any}, data::Dict{Symbol, Any})
     y_init = copy(data[:y])
     y_mean = nanmean(y_init)
     for i in eachindex(y_init)

@@ -1,5 +1,3 @@
-using Iterators: product
-using Distances: Metric, Euclidean, pairwise
 
 function expandgrid(x::Range, y::Range)
     matrix_from_cols([collect(xy) for xy in product(x, y)])
@@ -67,15 +65,6 @@ end
 function dimmin(A::Matrix, dim::Int)
     inds = vec(findmin(A, dim)[2])
     [ind2sub(size(A), ind)[dim] for ind in inds]
-end
-
-function writemc(filename::String, mc::ModelChains; names=mc.names)
-    sim = mc[:, names, :]
-    vals = sim.value
-    vals = vcat([vals[:, :, i] for i in 1:size(vals, 3)]...)
-    df = DataFrame([names, [vals[i, :] for i in 1:size(vals, 1)]...],
-                   [:name; Symbol["_$i" for i in 1:size(vals, 1)]...])
-    writetable(filename, df)
 end
 
 function overlaypoints(S::Matrix{Float64}; metric::Metric=Euclidean,

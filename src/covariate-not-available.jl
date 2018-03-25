@@ -1,13 +1,7 @@
 # Spatial regression model that does _not_ include an
 # informatively-missing covariate
 
-using Mamba: Model, Stochastic, Logical, Sampler, setsamplers!
-using StatsBase: Weights
-using Distributions
-
-include(joinpath(@__DIR__, "..", "utils.jl"))
-
-function get_model(monitor::Dict{Symbol, Any}, hyper::Dict{Symbol, Any})
+function get_model(::Type{NotAvailable}, monitor::Dict{Symbol, Any}, hyper::Dict{Symbol, Any})
 
     model = Model(
         y = Stochastic(2,
@@ -243,7 +237,7 @@ function get_model(monitor::Dict{Symbol, Any}, hyper::Dict{Symbol, Any})
     return model
 end
 
-function get_inits(params::Dict{Symbol, Any}, data::Dict{Symbol, Any})
+function get_inits(::Type{NotAvailable}, params::Dict{Symbol, Any}, data::Dict{Symbol, Any})
     y_init = copy(data[:y])
     y_mean = nanmean(y_init)
     for i in eachindex(y_init)
