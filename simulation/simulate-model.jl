@@ -40,35 +40,6 @@ function parse_commandline()
     return parse_args(s)
 end
 
-function parse_config(conf)
-    greek = Dict(
-        "alpha" => "α",
-        "beta" => "β",
-        "eta" => "η",
-        "sigma2" => "σ2",
-        "tau2" => "τ2",
-        "phi" => "ϕ"
-    )
-    parsed_conf = Dict{Symbol, Any}()
-    for key in keys(conf)
-        if key in ["y", "z", "w"]
-            variable = conf[key]
-            for (param, value) in variable
-                parsed_conf[Symbol(greek[param] * key)] = value
-            end
-        else
-            parsed_conf[Symbol(key)] = conf[key]
-        end
-    end
-    return parsed_conf
-end
-
-function load_config(filename)
-    @assert isfile(filename)
-    conf = YAML.load(open(filename, "r"))
-    return parse_config(conf)
-end
-
 function generate_data(;
         T::Int=10, nm::Int=50, m_active::Float64=0.5, p::Int=1, misspecify::Bool=false,
         βy::Vector{Float64}=zeros(p), βz::Vector{Float64}=zeros(p), βw::Vector{Float64}=zeros(p),
@@ -81,8 +52,7 @@ function generate_data(;
     Sk = expandgrid(0.0625:0.125:0.9375)
     ux, uy = [Uniform(minmax...) for minmax in extrema(S, 2)]
     Sm = transpose(hcat(rand(ux, nm), rand(uy, nm)))
-    metric = Euclidean()
-    nearest_cell = dimmin(pairwise(metric, S, Sm), 1)
+    nearest_cell = dimmin(pairwise(Euclidean(), S, Sm), 1)
 
     n = size(S, 2)
     x = ones(n, 1)
@@ -179,9 +149,9 @@ function generate_data(;
         :p => p
     )
     data[:nk] = size(Sk, 2)
-    data[:Ck] = pairwise(metric, S, Sk)
-    data[:Dk] = pairwise(metric, Sk)
-    data[:Dm] = pairwise(metric, Sm)
+    data[:Ck] = pairwise(Euclidean(), S, Sk)
+    data[:Dk] = pairwise(Euclidean(), Sk)
+    data[:Dm] = pairwise(Euclidean(), Sm)
     data[:y_missing] = isnan.(y)
     data[:z_missing] = isnan.(z)
 
@@ -195,7 +165,7 @@ args = parse_commandline()
 @assert 0 < args["thin"]    "Thin must be positive"
 @assert 0 < args["chains"]  "Chains must be positive"
 
-missingness = ["NotAvailable", "MissingAtRandom", "MissingNotAtRandom"] 
+missingness = ["NotAvailable", "MissingAtRandom", "MissingNotAtRandom"]
 @assert args["covariate"] in missingness
 covariate = eval(Symbol(args["covariate"]))
 

@@ -2,6 +2,7 @@ module SpatialModels
 
 using Mamba
 using Distributions
+using YAML
 
 using StatsBase: Weights
 using Iterators: product
@@ -21,7 +22,9 @@ export
     nansum,
     nanmean,
     dimmin,
-    overlaypoints
+    overlaypoints,
+    parse_config,
+    load_config
 
 abstract type SpatialCovariateMissingness end
 struct NotAvailable <: SpatialCovariateMissingness end

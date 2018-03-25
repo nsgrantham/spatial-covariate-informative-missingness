@@ -76,3 +76,32 @@ function overlaypoints(S::Matrix{Float64}; metric::Metric=Euclidean,
     any(within_maxdist) || error("No new points fall within max allowable distance from points in S")
     Sk[:, within_maxdist]
 end
+
+function parse_config(conf)
+    greek = Dict(
+        "alpha" => "α",
+        "beta" => "β",
+        "eta" => "η",
+        "sigma2" => "σ2",
+        "tau2" => "τ2",
+        "phi" => "ϕ"
+    )
+    parsed_conf = Dict{Symbol, Any}()
+    for key in keys(conf)
+        if key in ["y", "z", "w"]
+            variable = conf[key]
+            for (param, value) in variable
+                parsed_conf[Symbol(greek[param] * key)] = value
+            end
+        else
+            parsed_conf[Symbol(key)] = conf[key]
+        end
+    end
+    return parsed_conf
+end
+
+function load_config(filename)
+    @assert isfile(filename)
+    conf = YAML.load(open(filename, "r"))
+    return parse_config(conf)
+end
