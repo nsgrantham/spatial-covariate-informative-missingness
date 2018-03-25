@@ -62,6 +62,6 @@ w:
 
   # DiscreteUniform(start:by:end)
   phi: 
-    start: 0.1
-    by:    0.1
-    end:   1.0
+    start: 0.05
+    by:    0.05
+    end:   0.8

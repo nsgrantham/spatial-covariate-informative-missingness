@@ -1,4 +1,5 @@
 using ArgParse
+using DataFrames
 using Mamba
 using YAML
 
@@ -11,11 +12,11 @@ function parse_commandline()
             help = "File to which simulation results are written."
         "--iters", "-i"
             arg_type = Int
-            default = 1000
+            default = 500
             help = "Number of MCMC iterations."
         "--burnin", "-b"
             arg_type = Int
-            default = 500
+            default = 0
             help = "Number of initial MCMC iterations to remove as burn-in."
         "--thin", "-t"
             arg_type = Int
@@ -51,8 +52,8 @@ function parse_config(conf)
     parsed_conf = Dict{Symbol, Any}()
     for key in keys(conf)
         if key in ["y", "z", "w"]
-            var_level = conf[key]
-            for (param, value) in var_level
+            variable = conf[key]
+            for (param, value) in variable
                 parsed_conf[Symbol(greek[param] * key)] = value
             end
         else
@@ -60,6 +61,12 @@ function parse_config(conf)
         end
     end
     return parsed_conf
+end
+
+function load_config(filename)
+    @assert isfile(filename)
+    conf = YAML.load(open(filename, "r"))
+    return parse_config(conf)
 end
 
 function generate_data(;
@@ -139,8 +146,21 @@ function generate_data(;
 
     # define and return dicts of data (for mcmc) and truth (for validation)
     truth = Dict{Symbol, Any}(
-        :y_all => y_all,
-        :z_all => z_all
+        :y => y_all,
+        :z => z_all,
+        :αy => αy,
+        :βy => βy,
+        :σ2y => σ2y,
+        :τ2y => τ2y,
+        :ϕy => ϕy,
+        :βz => βz,
+        :σ2z => σ2z,
+        :τ2z => τ2z,
+        :ϕz => ϕz,
+        :αw => αw,
+        :βw => βw,
+        :σ2w => σ2w,
+        :ϕw => ϕw
     )
 
     data = Dict{Symbol, Any}(
@@ -170,35 +190,54 @@ end
 
 args = parse_commandline()
 
-@assert 0 < args["iters"]
-@assert 0 < args["burnin"]
-@assert 0 < args["thin"]
-@assert 0 < args["chains"]
+@assert 0 < args["iters"]   "Iters must be positive"
+@assert 0 <= args["burnin"] "Burn-in must be non-negative"
+@assert 0 < args["thin"]    "Thin must be positive"
+@assert 0 < args["chains"]  "Chains must be positive"
 
 @assert isfile(args["model"])
 include(abspath(args["model"]))  # get_model, get_inits
 
-@assert isfile(args["monitor"])
-monitor_conf = YAML.load(open(abspath(args["monitor"])))
-monitor_dict = parse_config(monitor_conf)
+monitor_conf = load_config(abspath(args["monitor"]))
+hyper_conf = load_config(abspath(args["hyper"]))
+data_conf = load_config(abspath(args["data"]))
+inits_conf = load_config(abspath(args["inits"]))
 
-@assert isfile(args["hyper"])
-hyper_conf = YAML.load(open(abspath(args["hyper"])))
-hyper_dict = parse_config(hyper_conf)
-
-@assert isfile(args["data"])
-data_conf = YAML.load(open(abspath(args["data"])))
-data_dict = parse_config(data_conf)
-
-@assert isfile(args["inits"])
-inits_conf = YAML.load(open(abspath(args["inits"])))
-inits_dict = parse_config(inits_conf)
-
-model = get_model(monitor_dict, hyper_dict)
-data, truth = generate_data(; data_dict...)
-inits = get_inits(inits_dict, data)
+model = get_model(monitor_conf, hyper_conf)
+data, truth = generate_data(; data_conf...)
+inits = get_inits(inits_conf, data)
 inits = [inits for _ in 1:args["chains"]]
 
-mcmc_dict = Dict(Symbol(key) => args[key] for key in ["burnin", "thin", "chains"])
-sim = mcmc(model, data, inits, args["iters"]; mcmc_dict...)
-describe(sim)
+mcmc_kwargs = Dict(Symbol(key) => args[key] for key in ["burnin", "thin", "chains"])
+sim = mcmc(model, data, inits, args["iters"]; mcmc_kwargs...)
+
+# summarize simulation results in DataFrame
+results = DataFrame(MambaName = sim.names)
+nodes = Symbol[]
+values = Float64[]
+for name in results[:MambaName]
+    for (node, value) in truth
+        if startswith(name, String(node))
+            push!(nodes, node)
+            if '[' in name
+                index = strip(name, [collect(String(node))..., '[', ']'])
+                index = parse.(split(index, ','))
+                push!(values, value[index...])
+            else
+                push!(values, value)
+            end
+        end
+    end
+end
+results[:MambaNode] = nodes
+results[:Value] = values
+
+post_summary = summarystats(sim)
+post_quantiles = quantile(sim)
+results[:Mean] = post_summary.value[:, 1]
+for (i, q) in enumerate(post_quantiles.colnames)
+    results[Symbol(q)] = post_quantiles.value[:, i]
+end
+
+print(results)
+writetable(abspath(args["output"]), results)
