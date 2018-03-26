@@ -83,7 +83,7 @@ function pairwise!(r::AbstractMatrix, dist::GreatCircle, a::AbstractMatrix)
     r
 end
 
-function load_data(dirname, dates::Vector{T}) where T <: Dates.Date
+function load_data(dirname)
 
     drop_cols = [:date, :monID, :gridID]
     function selectcols(df)
@@ -91,13 +91,8 @@ function load_data(dirname, dates::Vector{T}) where T <: Dates.Date
         df[:, keep_cols]
     end
 
-    Sm = transpose(convert(Matrix{Float64}, selectcols(readtable(joinpath(dirname, "S.csv")))))
-    S = transpose(convert(Matrix{Float64}, selectcols(readtable(joinpath(dirname, "S0.csv")))))
-
-    dates = map(d -> Dates.format(d, "yyyy-mm-dd"), dates)
-    function filterdates(df)
-        df[[d in dates for d in df[:date]], :]
-    end
+    Sm = transpose(convert(Matrix{Float64}, selectcols(readtable(joinpath(dirname, "Sm.csv")))))
+    S = transpose(convert(Matrix{Float64}, selectcols(readtable(joinpath(dirname, "S.csv")))))
 
     # Mamba requires NaNs over NAs to represent missing values
     function na2nan!(df)
@@ -119,25 +114,25 @@ function load_data(dirname, dates::Vector{T}) where T <: Dates.Date
         xs
     end
 
-    ym = filterdates(readtable(joinpath(dirname, "Y.csv")))
+    ym = readtable(joinpath(dirname, "ym.csv"))
     ym = matrix_from_rows(bydate(ym))
 
-    zm = filterdates(readtable(joinpath(dirname, "Z.csv")))
+    zm = readtable(joinpath(dirname, "zm.csv"))
     zm = matrix_from_rows(bydate(zm))
     
-    Xm = filterdates(readtable(joinpath(dirname, "X.csv")))
+    Xm = readtable(joinpath(dirname, "Xm.csv"))
     Xm = array3d_from_mats(bydate(Xm))
 
-    y = filterdates(readtable(joinpath(dirname, "Y0.csv")))
+    y = readtable(joinpath(dirname, "y.csv"))
     y = matrix_from_rows(bydate(y))
 
-    z = filterdates(readtable(joinpath(dirname, "Z0.csv")))
+    z = readtable(joinpath(dirname, "z.csv"))
     z = matrix_from_rows(bydate(z))
 
-    X = filterdates(readtable(joinpath(dirname, "X0.csv")))
+    X = readtable(joinpath(dirname, "X.csv"))
     X = array3d_from_mats(bydate(X))
 
-    mapping = readtable(joinpath(dirname, "mon2cell.csv"))
+    mapping = readtable(joinpath(dirname, "mapping.csv"))
     cell_of_mon = Dict{Int, Int}(zip(mapping[:monID], mapping[:cellID]))
 
     data = Dict{Symbol, Any}(
@@ -169,23 +164,26 @@ args = parse_commandline()
 @assert 0 < args["thin"]    "Thin must be positive"
 @assert 0 < args["chains"]  "Chains must be positive"
 
-missingness = ["NotAvailable", "MissingAtRandom", "MissingNotAtRandom"] 
-@assert args["covariate"] in missingness
-covariate = eval(Symbol(args["covariate"]))
+missingness = Dict(
+    "NotAvailable" => NotAvailable, 
+    "MissingAtRandom" => MissingAtRandom, 
+    "MissingNotAtRandom" => MissingNotAtRandom
+)
+@assert args["covariate"] in collect(keys(missingness))
+covariate = missingness[args["covariate"]]
 
 monitor_conf = load_config(abspath(args["monitor"]))
 hyper_conf = load_config(abspath(args["hyper"]))
 inits_conf = load_config(abspath(args["inits"]))
 
 @assert isdir(args["data"])
-
-dates = Date(2003, 1, 1):Dates.Day(1):Date(2003, 1, 3)
-model = get_model(covariate, monitor_conf, hyper_conf)
-data = load_data(args["data"], collect(dates))
+data = load_data(args["data"])
 data[:Sk] = overlaypoints(data[:S], metric=GreatCircle(), ticks=12, margin=0., maxdist=10.)
 data[:nk] = size(data[:Sk], 2)
 data[:Dk] = pairwise(GreatCircle(), data[:Sk])
 data[:Ck] = pairwise(GreatCircle(), data[:S], data[:Sk])
+
+model = get_model(covariate, monitor_conf, hyper_conf)
 inits = get_inits(covariate, inits_conf, data)
 inits = [inits for _ in 1:args["chains"]]
 
@@ -202,7 +200,6 @@ for name in results[:MambaName]
         end
     end
 end
-print(results)
 results[:MambaNode] = nodes
 
 post_summary = summarystats(sim)

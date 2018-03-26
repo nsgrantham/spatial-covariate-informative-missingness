@@ -44,7 +44,7 @@ function get_model(::Type{MissingAtRandom}, monitor::Dict{Symbol, Any}, hyper::D
             (σ2y, Ry, T) -> MultivariateDistribution[
                 MvNormal(σ2y .* Ry) for t in 1:T
             ],
-            monitor[:ηy]
+            false
         ),
 
         y_sse = Logical(
@@ -138,7 +138,7 @@ function get_model(::Type{MissingAtRandom}, monitor::Dict{Symbol, Any}, hyper::D
             (σ2z, Rz, T) -> MultivariateDistribution[
                 MvNormal(σ2z .* Rz) for t in 1:T
             ],
-            monitor[:ηz]
+            false
         ),
 
         Xβz = Logical(2,

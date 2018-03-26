@@ -5,8 +5,7 @@ w_pred: false
 
 # response variable
 y:
-  alpha:  false
-  eta:    false
+  alpha:  true
   beta:   true
   sigma2: true
   tau2:   true
@@ -14,7 +13,6 @@ y:
 
 # spatially-missing covariate
 z:
-  eta:    false
   beta:   true
   sigma2: true
   tau2:   true
@@ -23,7 +21,6 @@ z:
 # missingness factor
 w:
   alpha:  true
-  eta:    false
-  beta:   false
+  beta:   true
   sigma2: true
   phi:    true

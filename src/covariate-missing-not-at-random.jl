@@ -45,7 +45,7 @@ function get_model(::Type{MissingNotAtRandom}, monitor::Dict{Symbol, Any}, hyper
             (σ2y, Ry, T) -> MultivariateDistribution[
                 MvNormal(σ2y .* Ry) for t in 1:T
             ],
-            monitor[:ηy]
+            false
         ),
 
         y_sse = Logical(
@@ -139,7 +139,7 @@ function get_model(::Type{MissingNotAtRandom}, monitor::Dict{Symbol, Any}, hyper
             (σ2z, Rz, T) -> MultivariateDistribution[
                 MvNormal(σ2z .* Rz) for t in 1:T
             ],
-            monitor[:ηz]
+            false
         ),
 
         Xβz = Logical(2,
@@ -203,7 +203,7 @@ function get_model(::Type{MissingNotAtRandom}, monitor::Dict{Symbol, Any}, hyper
 
         Hy_array = Logical(3,
             (Ck, ϕy_support, Ry_inv_array) -> array3d_from_mats(
-            [exponential(Ck, ϕy_support[i]) * Ry_inv_array[:, :, i] for i in 1:length(ϕy_support)]
+                [exponential(Ck, ϕy_support[i]) * Ry_inv_array[:, :, i] for i in 1:length(ϕy_support)]
             ),
             false
         ),
@@ -325,7 +325,7 @@ function get_model(::Type{MissingNotAtRandom}, monitor::Dict{Symbol, Any}, hyper
             (σ2w, Rw, T) -> MultivariateDistribution[
                 MvNormal(σ2w .* Rw) for t in 1:T
             ],
-            monitor[:ηw]
+            false
         ),
 
         σ2w = Stochastic(
@@ -557,7 +557,8 @@ function get_model(::Type{MissingNotAtRandom}, monitor::Dict{Symbol, Any}, hyper
             end
         ),
 
-        Sampler(:ϕz_index, (ηz, σ2z, τ2z, z, Xβz, w, Xβw, Hηw, Xβzαw, αw, τ2w, logdetRz_array, Rz_inv_array, Hz_array, T, ϕz_support) ->
+        Sampler(:ϕz_index, (ηz, σ2z, τ2z, z, Xβz, w, Xβw, Hηw, Xβzαw, αw, τ2w, 
+                            logdetRz_array, Rz_inv_array, Hz_array, T, ϕz_support) ->
             begin
                 logpost = zeros(ϕz_support)
                 A = z - Xβz
@@ -621,7 +622,8 @@ function get_model(::Type{MissingNotAtRandom}, monitor::Dict{Symbol, Any}, hyper
 
         AMWG(:σ2w, 0.05, adapt=:burnin),
 
-        Sampler(:ϕw_index, (ηw, σ2w, τ2w, w, Xβw, Xβzαw, Hηzαw, logdetRw_array, Rw_inv_array, Hw_array, T, ϕw_support) ->
+        Sampler(:ϕw_index, (ηw, σ2w, τ2w, w, Xβw, Xβzαw, Hηzαw, logdetRw_array, 
+                            Rw_inv_array, Hw_array, T, ϕw_support) ->
             begin
                 logpost = zeros(ϕw_support)
                 A = w - Xβw - Xβzαw - Hηzαw

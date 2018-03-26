@@ -40,7 +40,7 @@ function get_model(::Type{NotAvailable}, monitor::Dict{Symbol, Any}, hyper::Dict
             (σ2y, Ry, T) -> MultivariateDistribution[
                 MvNormal(σ2y .* Ry) for t in 1:T
             ],
-            monitor[:ηy]
+            false
         ),
 
         y_sse = Logical(

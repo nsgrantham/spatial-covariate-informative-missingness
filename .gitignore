@@ -2,7 +2,8 @@
 #   Directories
 # ==============================
 
-data/
+pm-aod-analysis/data/**/*.csv
+pm-aod-analysis/data/**/*.RData
 
 # ==============================
 #   Julia
