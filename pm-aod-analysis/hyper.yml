@@ -1,0 +1,67 @@
+
+# response variable
+y:
+  # zero-mean Normal(sqrt(var))
+  alpha:
+    var: 1000
+
+  # zero-mean MvNormal(sqrt(var))
+  beta:
+    var: 1000
+
+  # InverseGamma(a, b)
+  tau2:
+    a: 1
+    b: 1
+  
+  # InverseGamma(a, b)
+  sigma2:
+    a: 1
+    b: 1
+
+  # DiscreteUniform(start:by:end)
+  phi: 
+    start: 100.
+    by:    100.
+    end:   3000.
+
+z:
+  # zero-mean MvNormal(sqrt(var))
+  beta:
+    var: 1000
+
+  # InverseGamma(a, b)
+  tau2:
+    a: 1
+    b: 1
+  
+  # InverseGamma(a, b)
+  sigma2:
+    a: 1
+    b: 1
+
+  # DiscreteUniform(start:by:end)
+  phi: 
+    start: 100.
+    by:    100.
+    end:   3000.
+
+w:
+  # zero-mean Normal(sqrt(var))
+  alpha:
+    var: 1000
+  
+    # zero-mean MvNormal(sqrt(var))
+  beta:
+    var: 1000
+
+  # InverseGamma(a, b)
+  sigma2:
+    a: 1
+    b: 1
+
+  # DiscreteUniform(start:by:end)
+  phi: 
+    start: 10.
+    by:    10.
+    end:   300.

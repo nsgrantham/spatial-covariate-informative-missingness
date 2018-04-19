@@ -1,4 +1,15 @@
+# ==============================
+#   Directories
+# ==============================
+
+pm-aod-analysis/data/**/*.csv
+pm-aod-analysis/data/**/*.RData
+
+# ==============================
+#   Julia
+# ==============================
+
 *.jl.cov
 *.jl.*.cov
 *.jl.mem
-deps/deps.jl
+deps/deps.jli

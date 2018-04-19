@@ -1,0 +1,26 @@
+
+y_pred: false
+z_pred: false
+w_pred: false
+
+# response variable
+y:
+  alpha:  true
+  beta:   true
+  sigma2: true
+  tau2:   true
+  phi:    true
+
+# spatially-missing covariate
+z:
+  beta:   true
+  sigma2: true
+  tau2:   true
+  phi:    true
+
+# missingness factor
+w:
+  alpha:  true
+  beta:   true
+  sigma2: true
+  phi:    true
